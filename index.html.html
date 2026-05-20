@@ -1,0 +1,1496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prompt Builder Quiz</title>
+<!-- Firebase Compat SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
+
+  :root {
+    --bg: #0a0e1a;
+    --surface: #111827;
+    --surface2: #1a2236;
+    --border: #1e2d4a;
+    --accent: #00d4ff;
+    --accent2: #7c3aed;
+    --accent3: #10b981;
+    --warn: #f59e0b;
+    --danger: #ef4444;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --correct: #10b981;
+    --wrong: #ef4444;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Sora', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ─── STARS BG ─── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      radial-gradient(1px 1px at 20% 30%, rgba(0,212,255,0.3) 0%, transparent 100%),
+      radial-gradient(1px 1px at 80% 10%, rgba(124,58,237,0.3) 0%, transparent 100%),
+      radial-gradient(1px 1px at 50% 80%, rgba(16,185,129,0.2) 0%, transparent 100%),
+      radial-gradient(600px 600px at 10% 90%, rgba(0,212,255,0.03) 0%, transparent 60%),
+      radial-gradient(600px 600px at 90% 20%, rgba(124,58,237,0.04) 0%, transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .page { position: relative; z-index: 1; }
+
+  /* ─── SCREENS ─── */
+  .screen { display: none; min-height: 100vh; }
+  .screen.active { display: flex; flex-direction: column; }
+
+  /* ─── NAV BAR ─── */
+  .nav {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 32px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(10,14,26,0.8);
+    backdrop-filter: blur(12px);
+    position: sticky; top: 0; z-index: 100;
+  }
+  .nav-logo {
+    display: flex; align-items: center; gap: 10px;
+    font-weight: 800; font-size: 18px; letter-spacing: -0.5px;
+  }
+  .nav-logo .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+  .nav-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 600;
+    padding: 4px 10px; border-radius: 20px;
+    background: rgba(0,212,255,0.1); border: 1px solid rgba(0,212,255,0.2);
+    color: var(--accent);
+  }
+
+  /* ─── BUTTONS ─── */
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 12px 24px; border-radius: 10px;
+    font-family: 'Sora', sans-serif; font-weight: 600; font-size: 15px;
+    cursor: pointer; border: none; transition: all 0.2s;
+    text-decoration: none;
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent), #0099cc);
+    color: #000; box-shadow: 0 0 20px rgba(0,212,255,0.3);
+  }
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 0 30px rgba(0,212,255,0.5); }
+  .btn-secondary {
+    background: var(--surface2); color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn-secondary:hover { background: var(--surface); border-color: var(--accent); }
+  .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+  .btn-ghost:hover { color: var(--text); border-color: var(--muted); }
+  .btn-danger { background: rgba(239,68,68,0.15); color: var(--danger); border: 1px solid rgba(239,68,68,0.3); }
+  .btn-success { background: rgba(16,185,129,0.15); color: var(--correct); border: 1px solid rgba(16,185,129,0.3); }
+  .btn-lg { padding: 16px 32px; font-size: 17px; border-radius: 14px; }
+  .btn-sm { padding: 8px 16px; font-size: 13px; border-radius: 8px; }
+
+  /* ─── CARDS ─── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px; padding: 28px;
+  }
+  .card-glow { box-shadow: 0 0 40px rgba(0,212,255,0.05); }
+
+  /* ─── INPUT ─── */
+  .input {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+    color: var(--text);
+    font-family: 'Sora', sans-serif; font-size: 15px;
+    outline: none; transition: border-color 0.2s;
+  }
+  .input:focus { border-color: var(--accent); }
+  .input::placeholder { color: var(--muted); }
+  label { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 8px; letter-spacing: 0.5px; text-transform: uppercase; }
+
+  /* ─── LANDING ─── */
+  #screen-landing {
+    align-items: center; justify-content: center;
+    text-align: center; padding: 40px 20px;
+  }
+  .landing-hero { max-width: 600px; }
+  .landing-eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; font-weight: 600; letter-spacing: 2px; color: var(--accent);
+    text-transform: uppercase; margin-bottom: 20px;
+  }
+  .landing-title {
+    font-size: clamp(38px, 6vw, 64px); font-weight: 800; line-height: 1.1;
+    letter-spacing: -2px; margin-bottom: 16px;
+  }
+  .landing-title span { color: var(--accent); }
+  .landing-sub { color: var(--muted); font-size: 17px; line-height: 1.6; margin-bottom: 40px; }
+  .landing-cards {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 16px; margin-top: 40px; text-align: left;
+  }
+  .role-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; padding: 24px;
+    cursor: pointer; transition: all 0.2s;
+  }
+  .role-card:hover { border-color: var(--accent); transform: translateY(-4px); box-shadow: 0 10px 40px rgba(0,212,255,0.1); }
+  .role-icon { font-size: 32px; margin-bottom: 12px; }
+  .role-title { font-weight: 700; font-size: 18px; margin-bottom: 6px; }
+  .role-desc { color: var(--muted); font-size: 13px; line-height: 1.5; }
+
+  /* ─── JOIN SCREEN ─── */
+  #screen-join { align-items: center; justify-content: center; padding: 40px 20px; }
+  .join-box { max-width: 440px; width: 100%; }
+  .join-title { font-size: 32px; font-weight: 800; letter-spacing: -1px; margin-bottom: 8px; }
+  .join-sub { color: var(--muted); margin-bottom: 32px; }
+  .join-form { display: flex; flex-direction: column; gap: 16px; }
+  .join-waiting {
+    text-align: center; padding: 40px 0;
+    display: none;
+  }
+  .waiting-pulse {
+    width: 60px; height: 60px; border-radius: 50%;
+    background: rgba(0,212,255,0.1); border: 2px solid var(--accent);
+    margin: 0 auto 20px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px;
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(0,212,255,0.4); }
+    50% { box-shadow: 0 0 0 20px rgba(0,212,255,0); }
+  }
+
+  /* ─── PARTICIPANT QUESTION ─── */
+  #screen-participant { padding: 0; }
+  .participant-content { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 32px 20px; }
+  .question-number {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; color: var(--accent); letter-spacing: 2px; text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+  .question-text {
+    font-size: clamp(20px, 3vw, 28px); font-weight: 700; text-align: center;
+    max-width: 700px; line-height: 1.4; margin-bottom: 40px;
+  }
+  .options-grid {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 14px; width: 100%; max-width: 700px;
+  }
+  .option-btn {
+    background: var(--surface);
+    border: 2px solid var(--border);
+    border-radius: 14px; padding: 20px 24px;
+    color: var(--text); font-family: 'Sora', sans-serif;
+    font-size: 15px; font-weight: 500;
+    cursor: pointer; transition: all 0.2s; text-align: left;
+    display: flex; align-items: flex-start; gap: 12px;
+  }
+  .option-btn:hover:not(:disabled) { border-color: var(--accent); background: rgba(0,212,255,0.05); transform: scale(1.02); }
+  .option-btn:disabled { cursor: default; }
+  .option-btn.selected { border-color: var(--accent); background: rgba(0,212,255,0.1); }
+  .option-btn.correct { border-color: var(--correct); background: rgba(16,185,129,0.15); }
+  .option-btn.wrong { border-color: var(--danger); background: rgba(239,68,68,0.1); }
+  .option-letter {
+    width: 28px; height: 28px; border-radius: 6px;
+    background: var(--surface2); border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 600;
+    flex-shrink: 0;
+  }
+  .timer-bar {
+    width: 100%; max-width: 700px;
+    height: 6px; background: var(--border);
+    border-radius: 3px; overflow: hidden; margin-bottom: 32px;
+  }
+  .timer-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    border-radius: 3px;
+    transition: width 1s linear;
+  }
+  .timer-fill.warning { background: linear-gradient(90deg, var(--warn), #f97316); }
+  .timer-fill.danger { background: linear-gradient(90deg, var(--danger), #dc2626); }
+
+  /* ─── HOST DASHBOARD ─── */
+  #screen-host { flex-direction: column; }
+  .host-layout { display: grid; grid-template-columns: 320px 1fr; flex: 1; min-height: 0; }
+  .host-sidebar {
+    background: var(--surface); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; padding: 24px; gap: 16px;
+    overflow-y: auto;
+  }
+  .sidebar-section-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 600; color: var(--muted);
+    letter-spacing: 1.5px; text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .host-main { padding: 32px; display: flex; flex-direction: column; gap: 24px; overflow-y: auto; }
+
+  .q-list { display: flex; flex-direction: column; gap: 8px; }
+  .q-item {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 16px;
+    cursor: pointer; transition: all 0.15s;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .q-item:hover { border-color: var(--muted); }
+  .q-item.active { border-color: var(--accent); background: rgba(0,212,255,0.06); }
+  .q-item.done { opacity: 0.5; }
+  .q-num {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    color: var(--muted); min-width: 24px;
+  }
+  .q-preview { font-size: 13px; line-height: 1.4; flex: 1; }
+
+  .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .stat-box {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px; text-align: center;
+  }
+  .stat-num { font-size: 28px; font-weight: 800; color: var(--accent); }
+  .stat-label { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  /* ─── LIVE QUESTION HOST VIEW ─── */
+  .host-question-card {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 16px; padding: 28px;
+  }
+  .hq-label { font-size: 12px; color: var(--accent); font-weight: 600; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 10px; }
+  .hq-text { font-size: 22px; font-weight: 700; line-height: 1.4; margin-bottom: 20px; }
+  .hq-options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .hq-opt {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 18px;
+    font-size: 14px; display: flex; align-items: center; gap: 10px;
+  }
+  .hq-opt.correct-ans { border-color: var(--correct); background: rgba(16,185,129,0.1); }
+  .hq-opt-letter {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700;
+    color: var(--muted);
+  }
+
+  /* ─── PARTICIPANTS LIST ─── */
+  .participants-list { display: flex; flex-direction: column; gap: 6px; max-height: 240px; overflow-y: auto; }
+  .participant-chip {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 12px;
+    font-size: 13px; display: flex; align-items: center; gap: 8px;
+  }
+  .participant-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--correct); flex-shrink: 0; }
+  .participant-dot.answered { background: var(--accent); }
+
+  /* ─── LIVE ANSWERS ─── */
+  .live-answers-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .ans-bar {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px; text-align: center;
+  }
+  .ans-bar.winner { border-color: var(--correct); background: rgba(16,185,129,0.08); }
+  .ans-count { font-size: 28px; font-weight: 800; }
+  .ans-label { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+  /* ─── LEADERBOARD ─── */
+  #screen-leaderboard { align-items: center; justify-content: center; padding: 40px 20px; }
+  .leaderboard-box { max-width: 700px; width: 100%; }
+  .lb-title { font-size: 36px; font-weight: 800; letter-spacing: -1.5px; margin-bottom: 8px; text-align: center; }
+  .lb-sub { color: var(--muted); text-align: center; margin-bottom: 32px; }
+  .lb-list { display: flex; flex-direction: column; gap: 8px; }
+  .lb-row {
+    display: flex; align-items: center; gap: 16px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px 20px;
+    transition: all 0.3s;
+    animation: slideIn 0.4s ease backwards;
+  }
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(-20px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  .lb-row:nth-child(1) { border-color: #fbbf24; background: rgba(251,191,36,0.06); }
+  .lb-row:nth-child(2) { border-color: #9ca3af; background: rgba(156,163,175,0.06); }
+  .lb-row:nth-child(3) { border-color: #b45309; background: rgba(180,83,9,0.06); }
+  .lb-rank { font-family: 'JetBrains Mono', monospace; font-size: 20px; font-weight: 800; width: 40px; text-align: center; }
+  .lb-rank.gold { color: #fbbf24; }
+  .lb-rank.silver { color: #9ca3af; }
+  .lb-rank.bronze { color: #b45309; }
+  .lb-name { flex: 1; font-weight: 600; font-size: 16px; }
+  .lb-score { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 18px; color: var(--accent); }
+  .lb-correct { font-size: 12px; color: var(--muted); }
+
+  /* ─── CONFETTI ─── */
+  .confetti-container { position: fixed; inset: 0; pointer-events: none; z-index: 9999; }
+  .confetti-piece {
+    position: absolute; width: 8px; height: 8px; border-radius: 2px;
+    animation: confettiFall linear forwards;
+  }
+  @keyframes confettiFall {
+    from { transform: translateY(-20px) rotate(0deg); opacity: 1; }
+    to { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+  }
+
+  /* ─── WAITING / IDLE STATE ─── */
+  .idle-state {
+    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; padding: 40px;
+  }
+  .idle-icon { font-size: 64px; margin-bottom: 20px; }
+  .idle-title { font-size: 24px; font-weight: 700; margin-bottom: 8px; }
+  .idle-sub { color: var(--muted); max-width: 400px; line-height: 1.6; }
+
+  /* ─── RESULT REVEAL ─── */
+  .result-reveal {
+    text-align: center; padding: 20px 0;
+  }
+  .result-icon { font-size: 64px; margin-bottom: 16px; animation: bounceIn 0.5s; }
+  @keyframes bounceIn {
+    0% { transform: scale(0); opacity: 0; }
+    70% { transform: scale(1.15); }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  .result-msg { font-size: 24px; font-weight: 700; margin-bottom: 8px; }
+  .result-pts { font-family: 'JetBrains Mono', monospace; font-size: 36px; font-weight: 800; color: var(--accent); }
+
+  /* ─── TOAST ─── */
+  .toast {
+    position: fixed; bottom: 24px; right: 24px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 20px;
+    font-size: 14px; z-index: 1000;
+    animation: toastIn 0.3s ease;
+    max-width: 320px;
+  }
+  @keyframes toastIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+
+  /* ─── SCROLLBAR ─── */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  .gen-msg { font-size: 16px; color: var(--muted); }
+
+  .host-controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .session-code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 24px; font-weight: 800; color: var(--accent);
+    letter-spacing: 4px;
+    background: rgba(0,212,255,0.08); border: 1px solid rgba(0,212,255,0.2);
+    padding: 8px 20px; border-radius: 10px;
+  }
+
+  /* ─── SETUP LAYOUT ─── */
+  .setup-layout {
+    flex: 1; display: grid; grid-template-columns: 1fr 1fr;
+    gap: 0; min-height: 0;
+  }
+  .setup-left {
+    padding: 32px; border-right: 1px solid var(--border);
+    overflow-y: auto; display: flex; flex-direction: column;
+  }
+  .setup-right {
+    padding: 32px; overflow-y: auto; display: flex; flex-direction: column;
+  }
+  .preview-q-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 18px 20px;
+  }
+  .preview-q-num {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    color: var(--accent); letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 8px;
+  }
+  .preview-q-text { font-size: 14px; font-weight: 600; margin-bottom: 12px; line-height: 1.5; }
+  .preview-options { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .preview-opt {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 7px; padding: 8px 12px;
+    font-size: 12px; display: flex; gap: 8px; align-items: flex-start;
+  }
+  .preview-opt.is-correct { border-color: var(--correct); background: rgba(16,185,129,0.08); color: var(--correct); }
+  .preview-opt-letter { font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700; color: var(--muted); flex-shrink: 0; margin-top: 1px; }
+  .preview-explanation {
+    margin-top: 10px; padding: 8px 12px;
+    background: rgba(0,212,255,0.05); border: 1px solid rgba(0,212,255,0.15);
+    border-radius: 7px; font-size: 12px; color: var(--muted); line-height: 1.5;
+  }
+
+  @media (max-width: 900px) {
+    .setup-layout { grid-template-columns: 1fr; }
+    .setup-left { border-right: none; border-bottom: 1px solid var(--border); }
+    .preview-options { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 700px) {
+    .host-layout { grid-template-columns: 1fr; }
+    .host-sidebar { max-height: 200px; }
+    .options-grid, .hq-options, .live-answers-grid { grid-template-columns: 1fr; }
+    .landing-cards { grid-template-columns: 1fr; }
+    .stats-row { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+<!-- ══════════════════════════════════════
+     SCREEN: LANDING
+══════════════════════════════════════ -->
+<div id="screen-landing" class="screen active">
+  <nav class="nav">
+    <div class="nav-logo"><div class="dot"></div> QuizLive</div>
+    <div class="nav-badge">Salesforce Prompt Builder</div>
+  </nav>
+  <div class="landing-hero">
+    <div class="landing-eyebrow">POST-SESSION QUIZ</div>
+    <h1 class="landing-title">Test Your<br><span>Prompt Builder</span><br>Knowledge</h1>
+    <p class="landing-sub">An interactive live quiz based on the Salesforce Prompt Templates &amp; Its Types presentation. Choose your role to get started.</p>
+    <div class="landing-cards">
+      <div class="role-card" onclick="goTo('host-setup')">
+        <div class="role-icon">🎛️</div>
+        <div class="role-title">Host / Presenter</div>
+        <div class="role-desc">Control questions, view live responses, and see the full leaderboard dashboard.</div>
+      </div>
+      <div class="role-card" onclick="goTo('join')">
+        <div class="role-icon">🙋</div>
+        <div class="role-title">Participant</div>
+        <div class="role-desc">Enter your name, wait for questions, and compete for the top spot on the leaderboard.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     SCREEN: JOIN
+══════════════════════════════════════ -->
+<div id="screen-join" class="screen">
+  <nav class="nav">
+    <div class="nav-logo"><div class="dot"></div> QuizLive</div>
+    <button class="btn btn-ghost btn-sm" onclick="goTo('landing')">← Back</button>
+  </nav>
+  <div class="join-box">
+    <div id="join-form-section">
+      <div class="join-title">Join the Quiz</div>
+      <p class="join-sub">Enter your details to participate in the live session.</p>
+      <div class="join-form">
+        <div>
+          <label>Session Code <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">(get this from your host)</span></label>
+          <input class="input" id="session-code-input" placeholder="e.g. A3F2" maxlength="6" style="font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;letter-spacing:4px;text-align:center;text-transform:uppercase" oninput="this.value=this.value.toUpperCase()" />
+        </div>
+        <div>
+          <label>Your Name</label>
+          <input class="input" id="participant-name" placeholder="e.g. Priya Sharma" maxlength="30" />
+        </div>
+        <button class="btn btn-primary btn-lg" onclick="joinQuiz()" style="width:100%;justify-content:center">
+          Join Session →
+        </button>
+      </div>
+    </div>
+    <div class="join-waiting" id="join-waiting-section">
+      <div class="waiting-pulse">⏳</div>
+      <div style="font-size:20px;font-weight:700;margin-bottom:8px">Waiting for host...</div>
+      <div style="color:var(--muted);margin-bottom:24px">You'll be notified when a question goes live</div>
+      <div id="joined-name-display" style="font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--accent);"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     SCREEN: PARTICIPANT QUESTION
+══════════════════════════════════════ -->
+<div id="screen-participant" class="screen">
+  <nav class="nav">
+    <div class="nav-logo"><div class="dot"></div> QuizLive</div>
+    <div id="p-score-badge" class="nav-badge">Score: 0</div>
+  </nav>
+  <div class="participant-content">
+    <div id="participant-idle" class="idle-state">
+      <div class="idle-icon">🎯</div>
+      <div class="idle-title">Get Ready!</div>
+      <div class="idle-sub">The next question will appear here automatically. Stay sharp!</div>
+    </div>
+    <div id="participant-question-view" style="display:none;width:100%;max-width:700px">
+      <div class="question-number" id="p-q-number">QUESTION 1 OF 10</div>
+      <div class="timer-bar"><div class="timer-fill" id="p-timer-fill" style="width:100%"></div></div>
+      <div class="question-text" id="p-question-text"></div>
+      <div class="options-grid" id="p-options-grid"></div>
+    </div>
+    <div id="participant-result-view" style="display:none" class="result-reveal">
+      <div class="result-icon" id="result-icon">✅</div>
+      <div class="result-msg" id="result-msg">Correct!</div>
+      <div class="result-pts" id="result-pts">+850 pts</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     SCREEN: HOST SETUP
+══════════════════════════════════════ -->
+<div id="screen-host-setup" class="screen">
+  <nav class="nav">
+    <div class="nav-logo"><div class="dot"></div> QuizLive</div>
+    <button class="btn btn-ghost btn-sm" onclick="goTo('landing')">← Back</button>
+  </nav>
+
+  <div class="setup-layout">
+    <!-- LEFT: Input panel -->
+    <div class="setup-left">
+      <div style="margin-bottom:6px;display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-size:26px;font-weight:800;letter-spacing:-0.5px">Paste Your Questions</div>
+          <p style="color:var(--muted);font-size:14px;margin-top:4px">Use the format shown — one question block at a time or all at once.</p>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="loadExample()">Load Example</button>
+      </div>
+
+      <div style="margin:16px 0 8px">
+        <label>Questions (paste below)</label>
+        <textarea class="input" id="questions-paste" rows="18" placeholder="Q: What does 'prompt resolution' mean?
+A: Activating a template
+B: Replacing merge fields with real data
+C: Saving a draft version
+D: Masking PII in the Trust Layer
+ANSWER: B
+EXPLANATION: Prompt resolution means replacing merge fields with real org data at runtime.
+
+Q: Which template type shows in the Highlights Panel automatically?
+A: Sales Email
+B: Field Generation
+C: Record Summary
+D: Flex
+ANSWER: C" style="font-family:'JetBrains Mono',monospace;font-size:13px;resize:vertical;line-height:1.6"></textarea>
+      </div>
+
+      <div class="setup-format-hint card" style="padding:16px;margin-bottom:16px">
+        <div style="font-size:12px;font-weight:700;color:var(--accent);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px">Format Guide</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);line-height:1.8">
+          <span style="color:var(--accent)">Q:</span> Your question text<br>
+          <span style="color:var(--text)">A:</span> Option A<br>
+          <span style="color:var(--text)">B:</span> Option B<br>
+          <span style="color:var(--text)">C:</span> Option C<br>
+          <span style="color:var(--text)">D:</span> Option D<br>
+          <span style="color:var(--correct)">ANSWER:</span> A / B / C / D<br>
+          <span style="color:var(--muted)">EXPLANATION:</span> Optional note (shown after reveal)<br>
+          <br>
+          Separate questions with a blank line.
+        </div>
+      </div>
+
+      <div style="display:flex;gap:12px;align-items:center">
+        <div style="flex:1">
+          <label>Time per Question</label>
+          <select class="input" id="time-per-q">
+            <option value="15">15 seconds</option>
+            <option value="20">20 seconds</option>
+            <option value="30" selected>30 seconds</option>
+            <option value="45">45 seconds</option>
+            <option value="60">60 seconds</option>
+          </select>
+        </div>
+        <button class="btn btn-secondary" onclick="parseAndPreview()" style="margin-top:22px;white-space:nowrap">
+          👁 Preview →
+        </button>
+      </div>
+    </div>
+
+    <!-- RIGHT: Preview panel -->
+    <div class="setup-right">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <div style="font-size:16px;font-weight:700">Preview <span id="preview-count" style="font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--muted)">— paste &amp; click preview</span></div>
+        <button class="btn btn-primary" id="launch-btn" onclick="launchFromPreview()" style="display:none">
+          🚀 Launch Quiz
+        </button>
+      </div>
+      <div id="preview-error" style="display:none;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:14px 18px;font-size:14px;color:var(--danger);margin-bottom:16px"></div>
+      <div id="preview-list" style="display:flex;flex-direction:column;gap:10px;overflow-y:auto;max-height:calc(100vh - 220px)"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     SCREEN: HOST DASHBOARD
+══════════════════════════════════════ -->
+<div id="screen-host" class="screen">
+  <nav class="nav">
+    <div class="nav-logo"><div class="dot"></div> QuizLive <span style="color:var(--muted);font-size:13px;font-weight:400;margin-left:8px">Host Dashboard</span></div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <div style="text-align:right">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:2px">Share code with participants</div>
+        <span class="session-code" id="session-code-display">----</span>
+      </div>
+    </div>
+  </nav>
+  <div class="host-layout">
+    <!-- Sidebar -->
+    <div class="host-sidebar">
+      <div>
+        <div class="sidebar-section-title">Questions</div>
+        <div class="q-list" id="host-q-list"></div>
+      </div>
+      <div>
+        <div class="sidebar-section-title" style="margin-top:8px">Participants (<span id="p-count">0</span>)</div>
+        <div class="participants-list" id="participants-list"></div>
+      </div>
+    </div>
+    <!-- Main -->
+    <div class="host-main">
+      <div class="stats-row">
+        <div class="stat-box"><div class="stat-num" id="stat-participants">0</div><div class="stat-label">Participants</div></div>
+        <div class="stat-box"><div class="stat-num" id="stat-answered">0</div><div class="stat-label">Answered</div></div>
+        <div class="stat-box"><div class="stat-num" id="stat-q-num">-</div><div class="stat-label">Current Q</div></div>
+      </div>
+
+      <!-- No question state -->
+      <div id="host-idle" class="idle-state" style="flex:0;padding:60px 20px">
+        <div class="idle-icon">🚀</div>
+        <div class="idle-title">Ready to Launch</div>
+        <div class="idle-sub">Select a question from the sidebar and push it live to all participants.</div>
+        <button class="btn btn-primary btn-lg" style="margin-top:24px" onclick="launchNextQuestion()">Launch First Question →</button>
+      </div>
+
+      <!-- Active question view -->
+      <div id="host-active-q" style="display:none;flex-direction:column;gap:20px">
+        <div class="host-controls">
+          <div id="host-timer-display" style="font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:800;color:var(--accent)">30s</div>
+          <div class="timer-bar" style="flex:1;margin:0"><div class="timer-fill" id="h-timer-fill" style="width:100%"></div></div>
+          <button class="btn btn-danger btn-sm" onclick="endQuestion()">End Question</button>
+          <button class="btn btn-success btn-sm" onclick="nextQuestion()">Next →</button>
+        </div>
+        <div class="host-question-card">
+          <div class="hq-label" id="hq-label">QUESTION 1 OF 10</div>
+          <div class="hq-text" id="hq-text"></div>
+          <div class="hq-options" id="hq-options"></div>
+        </div>
+        <div>
+          <div class="sidebar-section-title" style="margin-bottom:12px">Live Responses</div>
+          <div class="live-answers-grid" id="live-answers-grid"></div>
+        </div>
+      </div>
+
+      <!-- Reveal state -->
+      <div id="host-reveal" style="display:none;flex-direction:column;gap:20px">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div style="font-size:20px;font-weight:700">Answer Revealed</div>
+          <div class="host-controls">
+            <button class="btn btn-secondary" onclick="showLeaderboard()">📊 Leaderboard</button>
+            <button class="btn btn-primary" onclick="nextQuestion()">Next Question →</button>
+          </div>
+        </div>
+        <div class="host-question-card" id="host-reveal-card"></div>
+        <div>
+          <div class="sidebar-section-title" style="margin-bottom:12px">Top 10 This Round</div>
+          <div id="host-top10" style="display:flex;flex-direction:column;gap:8px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     SCREEN: LEADERBOARD
+══════════════════════════════════════ -->
+<div id="screen-leaderboard" class="screen">
+  <nav class="nav">
+    <div class="nav-logo"><div class="dot"></div> QuizLive</div>
+    <button class="btn btn-ghost btn-sm" onclick="returnToHost()">← Back to Host</button>
+  </nav>
+  <div class="leaderboard-box">
+    <div class="lb-title">🏆 Final Leaderboard</div>
+    <div class="lb-sub">Top performers from the Prompt Builder Quiz</div>
+    <div class="lb-list" id="leaderboard-list"></div>
+    <div style="text-align:center;margin-top:32px;display:flex;gap:12px;justify-content:center">
+      <button class="btn btn-primary btn-lg" onclick="restartQuiz()">🔄 Restart Quiz</button>
+    </div>
+  </div>
+  <div class="confetti-container" id="confetti-container"></div>
+</div>
+  <div class="gen-msg" id="gen-msg">Generating quiz questions with AI...</div>
+</div>
+
+<!-- Firebase Setup Modal -->
+<div id="firebase-setup-modal" style="display:none;position:fixed;inset:0;background:rgba(10,14,26,0.97);z-index:500;align-items:center;justify-content:center;padding:20px">
+  <div style="max-width:560px;width:100%;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:36px">
+    <div style="font-size:28px;font-weight:800;margin-bottom:8px">⚡ One-time Firebase Setup</div>
+    <p style="color:var(--muted);margin-bottom:24px;line-height:1.6">To work across all devices, this quiz needs a free Firebase Realtime Database. Takes about 2 minutes:</p>
+    <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:28px">
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:16px;display:flex;gap:12px">
+        <div style="width:28px;height:28px;border-radius:50%;background:rgba(0,212,255,0.15);border:1px solid var(--accent);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;flex-shrink:0;color:var(--accent)">1</div>
+        <div><div style="font-weight:600;margin-bottom:2px">Create free project</div><div style="font-size:13px;color:var(--muted)">Go to <a href="https://console.firebase.google.com" target="_blank" style="color:var(--accent)">console.firebase.google.com</a> → New Project (no billing needed)</div></div>
+      </div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:16px;display:flex;gap:12px">
+        <div style="width:28px;height:28px;border-radius:50%;background:rgba(0,212,255,0.15);border:1px solid var(--accent);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;flex-shrink:0;color:var(--accent)">2</div>
+        <div><div style="font-weight:600;margin-bottom:2px">Enable Realtime Database</div><div style="font-size:13px;color:var(--muted)">Build → Realtime Database → Create database → <strong style="color:var(--text)">Start in test mode</strong></div></div>
+      </div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:16px;display:flex;gap:12px">
+        <div style="width:28px;height:28px;border-radius:50%;background:rgba(0,212,255,0.15);border:1px solid var(--accent);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;flex-shrink:0;color:var(--accent)">3</div>
+        <div><div style="font-weight:600;margin-bottom:2px">Get your config</div><div style="font-size:13px;color:var(--muted)">Project Settings → Your apps → Add Web App → copy the <code style="background:var(--bg);padding:2px 6px;border-radius:4px">firebaseConfig</code> object</div></div>
+      </div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:16px;display:flex;gap:12px">
+        <div style="width:28px;height:28px;border-radius:50%;background:rgba(0,212,255,0.15);border:1px solid var(--accent);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;flex-shrink:0;color:var(--accent)">4</div>
+        <div><div style="font-weight:600;margin-bottom:2px">Paste into this file</div><div style="font-size:13px;color:var(--muted)">Open quiz-app.html in a text editor → find <code style="background:var(--bg);padding:2px 6px;border-radius:4px">const firebaseConfig</code> → replace the values</div></div>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px">
+      <a href="https://console.firebase.google.com" target="_blank" class="btn btn-primary" style="flex:1;justify-content:center">Open Firebase Console →</a>
+      <button class="btn btn-ghost" onclick="document.getElementById('firebase-setup-modal').style.display='none'">Close</button>
+    </div>
+  </div>
+</div>
+
+</div><!-- .page -->
+
+<script>
+// ══════════════════════════════════════
+// STATE
+// ══════════════════════════════════════
+
+
+let myRole = null; // 'host' | 'participant'
+let myName = '';
+let myScore = 0;
+let myCorrect = 0;
+let questionTimerInterval = null;
+let timeLeft = 30;
+let timePerQ = 30;
+let answerSubmitted = false;
+let answerTime = null;
+let questionStartTime = null;
+let currentQuestions = [];
+let currentQIndex = -1;
+let pollInterval = null;
+let currentLiveState = null;  // cached state for participants
+let hostLiveAnswers = [];      // cached answers for host
+
+// ══════════════════════════════════════
+// NAVIGATION
+// ══════════════════════════════════════
+function goTo(screenId) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  const map = {
+    'landing': 'screen-landing',
+    'join': 'screen-join',
+    'participant': 'screen-participant',
+    'host-setup': 'screen-host-setup',
+    'host': 'screen-host',
+    'leaderboard': 'screen-leaderboard'
+  };
+  const el = document.getElementById(map[screenId] || screenId);
+  if (el) el.classList.add('active');
+}
+
+// ══════════════════════════════════════
+// FIREBASE REALTIME DATABASE
+// ══════════════════════════════════════
+let db = null;
+let sessionRef = null;
+let sessionId = null;
+let firebaseListeners = [];
+
+function initFirebase() {
+  return new Promise((resolve) => {
+    if (db) { resolve(true); return; }
+    // Firebase compat SDK loaded via CDN in <head>
+    try {
+      if (!firebase.apps.length) {
+        // ─────────────────────────────────────────────────────────
+        // SETUP: Replace with YOUR Firebase project config.
+        // Steps (free, 2 min):
+        //   1. Go to https://console.firebase.google.com
+        //   2. Create project → Add Web App → copy config below
+        //   3. Go to Realtime Database → Create database → Start in test mode
+        // ─────────────────────────────────────────────────────────
+        const firebaseConfig = {
+          apiKey: "AIzaSyBTF5o6kDu8RwnepCxLMkDxXei4eliJn7I",
+          authDomain: "quiz-343b2.firebaseapp.com",
+          databaseURL: "https://quiz-343b2-default-rtdb.firebaseio.com",
+          projectId: "quiz-343b2",
+          storageBucket: "quiz-343b2.firebasestorage.app",
+          messagingSenderId: "33679588252",
+          appId: "1:33679588252:web:92516b8d077d2ca480e659",
+          measurementId: "G-GHWDNGZW6J"
+        };
+
+        // Check if config has been filled in
+        if (firebaseConfig.apiKey.includes('REPLACE')) {
+          showFirebaseSetupModal();
+          resolve(false);
+          return;
+        }
+
+        firebase.initializeApp(firebaseConfig);
+      }
+      db = firebase.database();
+      resolve(true);
+    } catch(e) {
+      console.error('Firebase init failed', e);
+      resolve(false);
+    }
+  });
+}
+
+function getSessionRef(sid) {
+  return db.ref('sessions/' + sid);
+}
+
+async function broadcastState(data) {
+  if (!db || !sessionId) return;
+  const payload = { ...data, ts: Date.now() };
+  // Don't store questions array on every broadcast (too large) — store once
+  if (payload.questions) { delete payload.questions; }
+  await getSessionRef(sessionId).child('state').set(payload);
+}
+
+async function saveAnswers(answer) {
+  // answer is a single answer object — push to list
+  if (!db || !sessionId) return;
+  await getSessionRef(sessionId).child('answers').push(answer);
+}
+
+async function readAnswers() {
+  if (!db || !sessionId) return [];
+  const snap = await getSessionRef(sessionId).child('answers').get();
+  if (!snap.exists()) return [];
+  return Object.values(snap.val() || {});
+}
+
+async function saveParticipant(p) {
+  if (!db || !sessionId) return;
+  const safe = p.name.replace(/[.#$/\[\]]/g, '_');
+  await getSessionRef(sessionId).child('participants/' + safe).set(p);
+}
+
+async function updateParticipantScore(name, score, correct) {
+  if (!db || !sessionId) return;
+  const safe = name.replace(/[.#$/\[\]]/g, '_');
+  await getSessionRef(sessionId).child('participants/' + safe).update({ score, correct });
+}
+
+async function readParticipants() {
+  if (!db || !sessionId) return [];
+  const snap = await getSessionRef(sessionId).child('participants').get();
+  if (!snap.exists()) return [];
+  return Object.values(snap.val() || {});
+}
+
+function listenState(callback) {
+  if (!db || !sessionId) return;
+  const ref = getSessionRef(sessionId).child('state');
+  const handler = ref.on('value', snap => {
+    if (snap.exists()) callback(snap.val());
+  });
+  firebaseListeners.push({ ref, handler, event: 'value' });
+}
+
+function listenAnswers(callback) {
+  if (!db || !sessionId) return;
+  const ref = getSessionRef(sessionId).child('answers');
+  const handler = ref.on('value', snap => {
+    callback(snap.exists() ? Object.values(snap.val() || {}) : []);
+  });
+  firebaseListeners.push({ ref, handler, event: 'value' });
+}
+
+function listenParticipants(callback) {
+  if (!db || !sessionId) return;
+  const ref = getSessionRef(sessionId).child('participants');
+  const handler = ref.on('value', snap => {
+    callback(snap.exists() ? Object.values(snap.val() || {}) : []);
+  });
+  firebaseListeners.push({ ref, handler, event: 'value' });
+}
+
+function removeAllListeners() {
+  firebaseListeners.forEach(({ ref, handler, event }) => ref.off(event, handler));
+  firebaseListeners = [];
+}
+
+// ══════════════════════════════════════
+// PARTICIPANT JOIN
+// ══════════════════════════════════════
+async function joinQuiz() {
+  const name = document.getElementById('participant-name').value.trim();
+  if (!name) { showToast('Please enter your name'); return; }
+
+  const sid = document.getElementById('session-code-input').value.trim().toUpperCase();
+  if (!sid || sid.length < 4) { showToast('Please enter the session code from your host'); return; }
+
+  showToast('Connecting...');
+  const ok = await initFirebase();
+  if (!ok) { showToast('❌ Could not connect. Check internet.'); return; }
+
+  sessionId = sid;
+  myName = name;
+  myRole = 'participant';
+  myScore = 0;
+  myCorrect = 0;
+
+  await saveParticipant({ name, score: 0, correct: 0, joinedAt: Date.now() });
+
+  document.getElementById('join-form-section').style.display = 'none';
+  document.getElementById('join-waiting-section').style.display = 'block';
+  document.getElementById('joined-name-display').textContent = `Joined as: ${name}`;
+
+  // Listen for host state changes in real time
+  listenState(handleStateChange);
+}
+
+function handleStateChange(state) {
+  if (state.type === 'question') {
+    currentLiveState = state;
+    answerSubmitted = false;
+    answerTime = null;
+    questionStartTime = state.startTime;
+    goTo('participant');
+    showParticipantQuestion(state);
+  } else if (state.type === 'reveal') {
+    if (!answerSubmitted) {
+      showParticipantResult(false, null, state.correctIndex, state.question);
+    } else {
+      // Already shown result inline
+    }
+  } else if (state.type === 'leaderboard') {
+    goTo('leaderboard');
+    renderLeaderboard(state.scores);
+    launchConfetti();
+  } else if (state.type === 'waiting') {
+    if (myRole === 'participant') {
+      goTo('join');
+      document.getElementById('join-form-section').style.display = 'none';
+      document.getElementById('join-waiting-section').style.display = 'block';
+    }
+  }
+}
+
+// ══════════════════════════════════════
+// PARTICIPANT QUESTION UI
+// ══════════════════════════════════════
+function showParticipantQuestion(state) {
+  document.getElementById('participant-idle').style.display = 'none';
+  document.getElementById('participant-result-view').style.display = 'none';
+  const qv = document.getElementById('participant-question-view');
+  qv.style.display = 'block';
+
+  const q = state.question;
+  currentQIndex = state.qIndex;
+  timePerQ = state.timePerQ;
+  timeLeft = state.timePerQ;
+  currentQuestions = state.questions || [];
+
+  document.getElementById('p-q-number').textContent = `QUESTION ${state.qIndex + 1} OF ${state.total}`;
+  document.getElementById('p-question-text').textContent = q.question;
+
+  const grid = document.getElementById('p-options-grid');
+  grid.innerHTML = '';
+  q.options.forEach((opt, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'option-btn';
+    btn.innerHTML = `<span class="option-letter">${'ABCD'[i]}</span>${opt}`;
+    btn.onclick = () => submitAnswer(i, btn);
+    grid.appendChild(btn);
+  });
+
+  startParticipantTimer(state.timePerQ, state.startTime);
+}
+
+function startParticipantTimer(duration, startTime) {
+  if (questionTimerInterval) clearInterval(questionTimerInterval);
+  const elapsed = (Date.now() - startTime) / 1000;
+  timeLeft = Math.max(0, duration - elapsed);
+
+  const fill = document.getElementById('p-timer-fill');
+  function tick() {
+    const pct = (timeLeft / duration) * 100;
+    fill.style.width = pct + '%';
+    fill.className = 'timer-fill' + (timeLeft < 10 ? ' danger' : timeLeft < duration * 0.4 ? ' warning' : '');
+    timeLeft -= 0.1;
+    if (timeLeft <= 0) {
+      clearInterval(questionTimerInterval);
+      if (!answerSubmitted) {
+        // Time's up — show no answer
+        disableAllOptions();
+        showParticipantResult(false, null, null, null);
+      }
+    }
+  }
+  tick();
+  questionTimerInterval = setInterval(tick, 100);
+}
+
+function disableAllOptions() {
+  document.querySelectorAll('.option-btn').forEach(b => b.disabled = true);
+}
+
+async function submitAnswer(index, btn) {
+  if (answerSubmitted) return;
+  answerSubmitted = true;
+  answerTime = Date.now();
+  disableAllOptions();
+  btn.classList.add('selected');
+
+  const state = currentLiveState;
+  if (!state) return;
+  const correct = index === state.question.correct;
+
+  // Calculate points (faster = more points, max 1000)
+  let pts = 0;
+  if (correct) {
+    const elapsed = (answerTime - state.startTime) / 1000;
+    const frac = Math.max(0, 1 - elapsed / state.timePerQ);
+    pts = Math.round(500 + frac * 500);
+    myScore += pts;
+    myCorrect += 1;
+  }
+
+  // Record answer — push single answer object
+  await saveAnswers({ name: myName, qIndex: state.qIndex, chosen: index, correct, pts, time: answerTime - state.startTime });
+
+  // Update score in Firebase
+  await updateParticipantScore(myName, myScore, myCorrect);
+
+  // Update badge
+  document.getElementById('p-score-badge').textContent = `Score: ${myScore}`;
+
+  showParticipantResult(correct, pts, state.question.correct, state.question);
+}
+
+function showParticipantResult(correct, pts, correctIndex, question) {
+  document.getElementById('participant-question-view').style.display = 'none';
+  document.getElementById('participant-result-view').style.display = 'block';
+
+  if (correct) {
+    document.getElementById('result-icon').textContent = '✅';
+    document.getElementById('result-msg').textContent = 'Correct! 🎉';
+    document.getElementById('result-pts').textContent = `+${pts} pts`;
+  } else if (pts === null && correctIndex === null) {
+    document.getElementById('result-icon').textContent = '⏰';
+    document.getElementById('result-msg').textContent = 'Time\'s up!';
+    document.getElementById('result-pts').textContent = `+0 pts`;
+  } else {
+    document.getElementById('result-icon').textContent = '❌';
+    document.getElementById('result-msg').textContent = `Wrong! Answer: ${question ? question.options[correctIndex] : ''}`;
+    document.getElementById('result-pts').textContent = `+0 pts`;
+  }
+}
+
+function parseQuestions(raw) {
+  const blocks = raw.trim().split(/\n\s*\n+/);
+  const questions = [], errors = [];
+  blocks.forEach((block, bi) => {
+    const lines = block.trim().split('\n').map(l => l.trim()).filter(Boolean);
+    if (!lines.length) return;
+    let question = null, options = [], correct = null, explanation = '';
+    lines.forEach(line => {
+      if (/^Q\s*:/i.test(line)) { question = line.replace(/^Q\s*:\s*/i, '').trim(); }
+      else if (/^[A-D]\s*:/i.test(line)) {
+        const idx = 'ABCD'.indexOf(line[0].toUpperCase());
+        options[idx] = line.replace(/^[A-D]\s*:\s*/i, '').trim();
+      }
+      else if (/^ANSWER\s*:/i.test(line)) {
+        const ans = line.replace(/^ANSWER\s*:\s*/i, '').trim().toUpperCase();
+        correct = 'ABCD'.indexOf(ans[0]);
+      }
+      else if (/^EXPLANATION\s*:/i.test(line)) {
+        explanation = line.replace(/^EXPLANATION\s*:\s*/i, '').trim();
+      }
+    });
+    if (!question) { errors.push(`Block ${bi+1}: Missing Q: line`); return; }
+    if (options.filter(Boolean).length < 2) { errors.push(`Block ${bi+1}: Need at least 2 options (A:, B:, C:, D:)`); return; }
+    if (correct === null || correct === -1) { errors.push(`Block ${bi+1}: Missing or invalid ANSWER: (use A/B/C/D)`); return; }
+    if (!options[correct]) { errors.push(`Block ${bi+1}: ANSWER points to an option that does not exist`); return; }
+    while (options.length < 4) options.push('');
+    questions.push({ question, options: options.slice(0,4).map((o,i) => o || ''), correct, explanation });
+  });
+  return { questions, errors };
+}
+
+function parseAndPreview() {
+  const raw = document.getElementById('questions-paste').value;
+  const errorEl = document.getElementById('preview-error');
+  const listEl = document.getElementById('preview-list');
+  const countEl = document.getElementById('preview-count');
+  const launchBtn = document.getElementById('launch-btn');
+  errorEl.style.display = 'none';
+  listEl.innerHTML = '';
+  if (!raw.trim()) { errorEl.textContent = 'Please paste your questions first.'; errorEl.style.display = 'block'; return; }
+  const { questions, errors } = parseQuestions(raw);
+  if (errors.length) {
+    errorEl.innerHTML = '<strong>\u26a0\ufe0f Some blocks had issues:</strong><br>' + errors.map(e => '\u2022 ' + e).join('<br>');
+    errorEl.style.display = 'block';
+  }
+  if (questions.length === 0) {
+    countEl.textContent = '\u2014 0 questions parsed';
+    launchBtn.style.display = 'none';
+    if (!errors.length) { errorEl.textContent = 'No questions found. Check the format.'; errorEl.style.display = 'block'; }
+    return;
+  }
+  countEl.textContent = `\u2014 ${questions.length} question${questions.length > 1 ? 's' : ''} ready`;
+  launchBtn.style.display = 'inline-flex';
+  questions.forEach((q, i) => {
+    const card = document.createElement('div');
+    card.className = 'preview-q-card';
+    card.innerHTML = `
+      <div class="preview-q-num">Q${i+1}</div>
+      <div class="preview-q-text">${q.question}</div>
+      <div class="preview-options">
+        ${q.options.map((opt, oi) => opt ? `<div class="preview-opt ${oi === q.correct ? 'is-correct' : ''}">
+          <span class="preview-opt-letter">${'ABCD'[oi]}</span>${opt}${oi === q.correct ? ' \u2713' : ''}
+        </div>` : '').join('')}
+      </div>
+      ${q.explanation ? `<div class="preview-explanation">\ud83d\udca1 ${q.explanation}</div>` : ''}
+    `;
+    listEl.appendChild(card);
+  });
+  currentQuestions = questions;
+  showToast('\u2705 ' + questions.length + ' questions parsed successfully');
+}
+
+function launchFromPreview() {
+  if (!currentQuestions.length) { showToast('Parse questions first'); return; }
+  timePerQ = parseInt(document.getElementById('time-per-q').value);
+  launchHostDashboard();
+}
+
+function loadExample() {
+  document.getElementById('questions-paste').value = `Q: What does prompt resolution mean in Salesforce Prompt Builder?
+A: Fixing errors in a prompt template
+B: Replacing merge fields with real org data at runtime
+C: Activating a template to make it org-wide
+D: Deleting old template versions
+ANSWER: B
+EXPLANATION: Prompt resolution means replacing template merge fields with real Salesforce CRM data at runtime.
+
+Q: Which Prompt Template type auto-displays in the Highlights Panel without any user action?
+A: Sales Email
+B: Field Generation
+C: Record Summary
+D: Flex
+ANSWER: C
+EXPLANATION: Record Summary auto-displays in the Highlights Panel the moment a record opens, no button click needed.
+
+Q: What is the maximum number of total merge fields allowed per Prompt Template?
+A: 10
+B: 25
+C: 50
+D: 100
+ANSWER: C
+EXPLANATION: The hard limit is 50 total merge fields per template.`;
+  parseAndPreview();
+}
+
+
+// ══════════════════════════════════════
+// HOST DASHBOARD
+// ══════════════════════════════════════
+async function launchHostDashboard() {
+  myRole = 'host';
+  currentQIndex = -1;
+
+  showToast('Setting up session...');
+  const ok = await initFirebase();
+  if (!ok) { showToast('❌ Firebase unavailable. Check internet.'); return; }
+
+  // Create new session ID
+  sessionId = Math.random().toString(36).slice(2,6).toUpperCase();
+  document.getElementById('session-code-display').textContent = sessionId;
+
+  // Clear old data
+  await getSessionRef(sessionId).remove();
+
+  // Store questions on Firebase once
+  await getSessionRef(sessionId).child('questions').set(currentQuestions);
+
+  goTo('host');
+  renderQList();
+  await broadcastState({ type: 'waiting' });
+
+  // Listen for participants and answers in real time
+  startHostRealtimeListeners();
+}
+
+function renderQList() {
+  const list = document.getElementById('host-q-list');
+  list.innerHTML = '';
+  currentQuestions.forEach((q, i) => {
+    const item = document.createElement('div');
+    item.className = 'q-item' + (i < currentQIndex ? ' done' : '') + (i === currentQIndex ? ' active' : '');
+    item.id = `q-item-${i}`;
+    item.innerHTML = `<span class="q-num">${i+1}</span><span class="q-preview">${q.question.slice(0,60)}${q.question.length>60?'…':''}</span>`;
+    item.onclick = () => launchQuestion(i);
+    list.appendChild(item);
+  });
+}
+
+function startHostRealtimeListeners() {
+  // Listen to participants
+  listenParticipants((participants) => {
+    document.getElementById('p-count').textContent = participants.length;
+    document.getElementById('stat-participants').textContent = participants.length;
+    const pList = document.getElementById('participants-list');
+    pList.innerHTML = '';
+    participants.sort((a,b) => (b.score||0)-(a.score||0)).forEach(p => {
+      const chip = document.createElement('div');
+      chip.className = 'participant-chip';
+      const answered = currentQIndex >= 0 && hostLiveAnswers.some(a => a.name === p.name && a.qIndex === currentQIndex);
+      chip.innerHTML = `<div class="participant-dot ${answered ? 'answered' : ''}"></div><span>${p.name}</span><span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent)">${p.score || 0}</span>`;
+      pList.appendChild(chip);
+    });
+  });
+
+  // Listen to answers
+  listenAnswers((answers) => {
+    hostLiveAnswers = answers;
+    if (currentQIndex >= 0) {
+      const qAnswers = answers.filter(a => a.qIndex === currentQIndex);
+      document.getElementById('stat-answered').textContent = qAnswers.length;
+      updateLiveAnswerBars(qAnswers);
+    }
+  });
+}
+
+function launchNextQuestion() {
+  launchQuestion(0);
+}
+
+async function launchQuestion(index) {
+  if (index >= currentQuestions.length) {
+    showLeaderboard();
+    return;
+  }
+  currentQIndex = index;
+  const q = currentQuestions[index];
+  const startTime = Date.now();
+
+  // Broadcast to participants via Firebase
+  await broadcastState({
+    type: 'question',
+    qIndex: index,
+    total: currentQuestions.length,
+    question: q,
+    timePerQ,
+    startTime
+  });
+
+  // Update host UI
+  document.getElementById('host-idle').style.display = 'none';
+  document.getElementById('host-reveal').style.display = 'none';
+  document.getElementById('host-active-q').style.display = 'flex';
+  document.getElementById('stat-q-num').textContent = `${index+1}/${currentQuestions.length}`;
+  document.getElementById('hq-label').textContent = `QUESTION ${index+1} OF ${currentQuestions.length}`;
+  document.getElementById('hq-text').textContent = q.question;
+
+  const opts = document.getElementById('hq-options');
+  opts.innerHTML = '';
+  q.options.forEach((opt, i) => {
+    const d = document.createElement('div');
+    d.className = 'hq-opt' + (i === q.correct ? ' correct-ans' : '');
+    d.innerHTML = `<span class="hq-opt-letter">${'ABCD'[i]}</span>${opt}`;
+    opts.appendChild(d);
+  });
+
+  // Live answer bars init
+  const grid = document.getElementById('live-answers-grid');
+  grid.innerHTML = '';
+  q.options.forEach((opt, i) => {
+    const bar = document.createElement('div');
+    bar.className = 'ans-bar' + (i === q.correct ? ' winner' : '');
+    bar.id = `ans-bar-${i}`;
+    bar.innerHTML = `<div class="ans-count" id="ans-count-${i}">0</div><div class="ans-label">${'ABCD'[i]}: ${opt.slice(0,20)}${opt.length>20?'…':''}</div>`;
+    grid.appendChild(bar);
+  });
+
+  renderQList();
+  startHostTimer(startTime);
+}
+
+function updateLiveAnswerBars(answers) {
+  const counts = [0, 0, 0, 0];
+  answers.forEach(a => { if (a.chosen >= 0 && a.chosen < 4) counts[a.chosen]++; });
+  counts.forEach((c, i) => {
+    const el = document.getElementById(`ans-count-${i}`);
+    if (el) el.textContent = c;
+  });
+}
+
+function startHostTimer(startTime) {
+  if (questionTimerInterval) clearInterval(questionTimerInterval);
+  function tick() {
+    const elapsed = (Date.now() - startTime) / 1000;
+    const remaining = Math.max(0, timePerQ - elapsed);
+    document.getElementById('host-timer-display').textContent = Math.ceil(remaining) + 's';
+    const pct = (remaining / timePerQ) * 100;
+    const fill = document.getElementById('h-timer-fill');
+    fill.style.width = pct + '%';
+    fill.className = 'timer-fill' + (remaining < 10 ? ' danger' : remaining < timePerQ * 0.4 ? ' warning' : '');
+    if (remaining <= 0) { clearInterval(questionTimerInterval); endQuestion(); }
+  }
+  tick();
+  questionTimerInterval = setInterval(tick, 200);
+}
+
+async function endQuestion() {
+  clearInterval(questionTimerInterval);
+  const q = currentQuestions[currentQIndex];
+  await broadcastState({ type: 'reveal', correctIndex: q.correct, question: q, qIndex: currentQIndex, total: currentQuestions.length });
+
+  document.getElementById('host-active-q').style.display = 'none';
+  document.getElementById('host-reveal').style.display = 'flex';
+
+  // Reveal card
+  const card = document.getElementById('host-reveal-card');
+  card.innerHTML = `
+    <div class="hq-label">ANSWER REVEALED — Q${currentQIndex+1}</div>
+    <div class="hq-text">${q.question}</div>
+    <div class="hq-options">${q.options.map((o,i)=>`<div class="hq-opt${i===q.correct?' correct-ans':''}"><span class="hq-opt-letter">${'ABCD'[i]}</span>${o}</div>`).join('')}</div>
+    ${q.explanation ? `<div style="margin-top:16px;padding:12px 16px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);border-radius:10px;font-size:14px;color:var(--correct)">💡 ${q.explanation}</div>` : ''}
+  `;
+
+  // Top 10
+  const allAns = await readAnswers();
+  const answers = allAns.filter(a => a.qIndex === currentQIndex && a.correct);
+  answers.sort((a,b) => a.time - b.time);
+  const top10 = answers.slice(0, 10);
+  const top10El = document.getElementById('host-top10');
+  top10El.innerHTML = '';
+  if (top10.length === 0) {
+    top10El.innerHTML = '<div style="color:var(--muted);font-size:14px">No correct answers yet</div>';
+  } else {
+    top10.forEach((a, i) => {
+      const d = document.createElement('div');
+      d.style.cssText = 'display:flex;align-items:center;gap:12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 16px';
+      d.innerHTML = `<span style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;color:var(--muted);width:24px">#${i+1}</span><span style="flex:1;font-size:14px">${a.name}</span><span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--correct)">+${a.pts} pts · ${(a.time/1000).toFixed(1)}s</span>`;
+      top10El.appendChild(d);
+    });
+  }
+}
+
+function nextQuestion() {
+  launchQuestion(currentQIndex + 1);
+}
+
+async function showLeaderboard() {
+  clearInterval(questionTimerInterval);
+  const participants = await readParticipants();
+  const answers = await readAnswers();
+
+  // Use scores stored in Firebase participant records (updated on every answer)
+  const scoreMap = {};
+  participants.forEach(p => {
+    scoreMap[p.name] = { score: p.score || 0, correct: p.correct || 0 };
+  });
+  // Catch anyone who answered but wasn't pre-registered
+  answers.forEach(a => {
+    if (!scoreMap[a.name]) scoreMap[a.name] = { score: 0, correct: 0 };
+  });
+
+  const scores = Object.entries(scoreMap)
+    .map(([name, d]) => ({ name, ...d }))
+    .sort((a, b) => b.score - a.score);
+
+  await broadcastState({ type: 'leaderboard', scores });
+  goTo('leaderboard');
+  renderLeaderboard(scores);
+  launchConfetti();
+}
+
+function renderLeaderboard(scores) {
+  const list = document.getElementById('leaderboard-list');
+  list.innerHTML = '';
+  const medals = ['🥇', '🥈', '🥉'];
+  scores.slice(0, 15).forEach((s, i) => {
+    const row = document.createElement('div');
+    row.className = 'lb-row';
+    row.style.animationDelay = (i * 0.07) + 's';
+    const rankClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
+    row.innerHTML = `
+      <div class="lb-rank ${rankClass}">${medals[i] || (i+1)}</div>
+      <div class="lb-name">${s.name}</div>
+      <div class="lb-correct">${s.correct || 0} correct</div>
+      <div class="lb-score">${s.score || 0} pts</div>
+    `;
+    list.appendChild(row);
+  });
+  if (scores.length === 0) {
+    list.innerHTML = '<div style="text-align:center;color:var(--muted);padding:40px">No participants yet</div>';
+  }
+}
+
+function returnToHost() {
+  goTo('host');
+}
+
+async function restartQuiz() {
+  removeAllListeners();
+  if (db && sessionId) await getSessionRef(sessionId).remove();
+  sessionId = null;
+  currentQIndex = -1;
+  currentQuestions = [];
+  hostLiveAnswers = [];
+  goTo('landing');
+}
+
+// ══════════════════════════════════════
+// CONFETTI
+// ══════════════════════════════════════
+function launchConfetti() {
+  const container = document.getElementById('confetti-container');
+  container.innerHTML = '';
+  const colors = ['#00d4ff', '#7c3aed', '#10b981', '#f59e0b', '#ef4444', '#ffffff'];
+  for (let i = 0; i < 120; i++) {
+    const piece = document.createElement('div');
+    piece.className = 'confetti-piece';
+    piece.style.cssText = `
+      left: ${Math.random()*100}%;
+      top: -20px;
+      background: ${colors[Math.floor(Math.random()*colors.length)]};
+      animation-duration: ${1.5 + Math.random()*2}s;
+      animation-delay: ${Math.random()*1.5}s;
+      transform: rotate(${Math.random()*360}deg);
+      width: ${4 + Math.random()*8}px;
+      height: ${4 + Math.random()*8}px;
+    `;
+    container.appendChild(piece);
+  }
+  setTimeout(() => { container.innerHTML = ''; }, 4000);
+}
+
+// ══════════════════════════════════════
+// TOAST
+// ══════════════════════════════════════
+function showFirebaseSetupModal() {
+  const modal = document.getElementById('firebase-setup-modal');
+  modal.style.display = 'flex';
+}
+
+function showToast(msg) {
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3000);
+}
+
+// ══════════════════════════════════════
+// INIT
+// ══════════════════════════════════════
+
+</script>
+</body>
+</html>
