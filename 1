@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Prompt Builder Quiz</title>
+<!-- Firebase Compat SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
 
@@ -385,22 +388,6 @@
   ::-webkit-scrollbar-track { background: var(--bg); }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
-  /* ─── GENERATING OVERLAY ─── */
-  .gen-overlay {
-    position: fixed; inset: 0;
-    background: rgba(10,14,26,0.95);
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    z-index: 200;
-    gap: 20px;
-  }
-  .gen-spinner {
-    width: 48px; height: 48px;
-    border: 3px solid var(--border);
-    border-top-color: var(--accent);
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
   .gen-msg { font-size: 16px; color: var(--muted); }
 
   .host-controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
@@ -412,6 +399,46 @@
     padding: 8px 20px; border-radius: 10px;
   }
 
+  /* ─── SETUP LAYOUT ─── */
+  .setup-layout {
+    flex: 1; display: grid; grid-template-columns: 1fr 1fr;
+    gap: 0; min-height: 0;
+  }
+  .setup-left {
+    padding: 32px; border-right: 1px solid var(--border);
+    overflow-y: auto; display: flex; flex-direction: column;
+  }
+  .setup-right {
+    padding: 32px; overflow-y: auto; display: flex; flex-direction: column;
+  }
+  .preview-q-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 18px 20px;
+  }
+  .preview-q-num {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    color: var(--accent); letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 8px;
+  }
+  .preview-q-text { font-size: 14px; font-weight: 600; margin-bottom: 12px; line-height: 1.5; }
+  .preview-options { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .preview-opt {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 7px; padding: 8px 12px;
+    font-size: 12px; display: flex; gap: 8px; align-items: flex-start;
+  }
+  .preview-opt.is-correct { border-color: var(--correct); background: rgba(16,185,129,0.08); color: var(--correct); }
+  .preview-opt-letter { font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700; color: var(--muted); flex-shrink: 0; margin-top: 1px; }
+  .preview-explanation {
+    margin-top: 10px; padding: 8px 12px;
+    background: rgba(0,212,255,0.05); border: 1px solid rgba(0,212,255,0.15);
+    border-radius: 7px; font-size: 12px; color: var(--muted); line-height: 1.5;
+  }
+
+  @media (max-width: 900px) {
+    .setup-layout { grid-template-columns: 1fr; }
+    .setup-left { border-right: none; border-bottom: 1px solid var(--border); }
+    .preview-options { grid-template-columns: 1fr; }
+  }
   @media (max-width: 700px) {
     .host-layout { grid-template-columns: 1fr; }
     .host-sidebar { max-height: 200px; }
@@ -464,6 +491,10 @@
       <div class="join-title">Join the Quiz</div>
       <p class="join-sub">Enter your details to participate in the live session.</p>
       <div class="join-form">
+        <div>
+          <label>Session Code <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">(get this from your host)</span></label>
+          <input class="input" id="session-code-input" placeholder="e.g. A3F2" maxlength="6" style="font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;letter-spacing:4px;text-align:center;text-transform:uppercase" oninput="this.value=this.value.toUpperCase()" />
+        </div>
         <div>
           <label>Your Name</label>
           <input class="input" id="participant-name" placeholder="e.g. Priya Sharma" maxlength="30" />
@@ -518,40 +549,78 @@
     <div class="nav-logo"><div class="dot"></div> QuizLive</div>
     <button class="btn btn-ghost btn-sm" onclick="goTo('landing')">← Back</button>
   </nav>
-  <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:40px 20px">
-    <div style="max-width:500px;width:100%">
-      <div style="font-size:32px;font-weight:800;margin-bottom:8px">Host Setup</div>
-      <p style="color:var(--muted);margin-bottom:32px">Generate AI questions from the presentation, then launch your quiz session.</p>
-      <div class="card">
-        <div style="margin-bottom:20px">
-          <label>Number of Questions</label>
-          <select class="input" id="num-questions">
-            <option value="5">5 Questions</option>
-            <option value="10" selected>10 Questions</option>
-            <option value="15">15 Questions</option>
-          </select>
+
+  <div class="setup-layout">
+    <!-- LEFT: Input panel -->
+    <div class="setup-left">
+      <div style="margin-bottom:6px;display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-size:26px;font-weight:800;letter-spacing:-0.5px">Paste Your Questions</div>
+          <p style="color:var(--muted);font-size:14px;margin-top:4px">Use the format shown — one question block at a time or all at once.</p>
         </div>
-        <div style="margin-bottom:20px">
-          <label>Difficulty</label>
-          <select class="input" id="difficulty">
-            <option value="easy">Easy</option>
-            <option value="medium" selected>Medium</option>
-            <option value="hard">Hard</option>
-          </select>
+        <button class="btn btn-ghost btn-sm" onclick="loadExample()">Load Example</button>
+      </div>
+
+      <div style="margin:16px 0 8px">
+        <label>Questions (paste below)</label>
+        <textarea class="input" id="questions-paste" rows="18" placeholder="Q: What does 'prompt resolution' mean?
+A: Activating a template
+B: Replacing merge fields with real data
+C: Saving a draft version
+D: Masking PII in the Trust Layer
+ANSWER: B
+EXPLANATION: Prompt resolution means replacing merge fields with real org data at runtime.
+
+Q: Which template type shows in the Highlights Panel automatically?
+A: Sales Email
+B: Field Generation
+C: Record Summary
+D: Flex
+ANSWER: C" style="font-family:'JetBrains Mono',monospace;font-size:13px;resize:vertical;line-height:1.6"></textarea>
+      </div>
+
+      <div class="setup-format-hint card" style="padding:16px;margin-bottom:16px">
+        <div style="font-size:12px;font-weight:700;color:var(--accent);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px">Format Guide</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);line-height:1.8">
+          <span style="color:var(--accent)">Q:</span> Your question text<br>
+          <span style="color:var(--text)">A:</span> Option A<br>
+          <span style="color:var(--text)">B:</span> Option B<br>
+          <span style="color:var(--text)">C:</span> Option C<br>
+          <span style="color:var(--text)">D:</span> Option D<br>
+          <span style="color:var(--correct)">ANSWER:</span> A / B / C / D<br>
+          <span style="color:var(--muted)">EXPLANATION:</span> Optional note (shown after reveal)<br>
+          <br>
+          Separate questions with a blank line.
         </div>
-        <div style="margin-bottom:24px">
-          <label>Time per Question (seconds)</label>
+      </div>
+
+      <div style="display:flex;gap:12px;align-items:center">
+        <div style="flex:1">
+          <label>Time per Question</label>
           <select class="input" id="time-per-q">
             <option value="15">15 seconds</option>
             <option value="20">20 seconds</option>
             <option value="30" selected>30 seconds</option>
             <option value="45">45 seconds</option>
+            <option value="60">60 seconds</option>
           </select>
         </div>
-        <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="generateQuestions()">
-          ✨ Generate Questions with AI
+        <button class="btn btn-secondary" onclick="parseAndPreview()" style="margin-top:22px;white-space:nowrap">
+          👁 Preview →
         </button>
       </div>
+    </div>
+
+    <!-- RIGHT: Preview panel -->
+    <div class="setup-right">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <div style="font-size:16px;font-weight:700">Preview <span id="preview-count" style="font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--muted)">— paste &amp; click preview</span></div>
+        <button class="btn btn-primary" id="launch-btn" onclick="launchFromPreview()" style="display:none">
+          🚀 Launch Quiz
+        </button>
+      </div>
+      <div id="preview-error" style="display:none;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:14px 18px;font-size:14px;color:var(--danger);margin-bottom:16px"></div>
+      <div id="preview-list" style="display:flex;flex-direction:column;gap:10px;overflow-y:auto;max-height:calc(100vh - 220px)"></div>
     </div>
   </div>
 </div>
@@ -563,8 +632,10 @@
   <nav class="nav">
     <div class="nav-logo"><div class="dot"></div> QuizLive <span style="color:var(--muted);font-size:13px;font-weight:400;margin-left:8px">Host Dashboard</span></div>
     <div style="display:flex;align-items:center;gap:12px">
-      <span style="font-size:13px;color:var(--muted)">Session:</span>
-      <span class="session-code" id="session-code-display">----</span>
+      <div style="text-align:right">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:2px">Share code with participants</div>
+        <span class="session-code" id="session-code-display">----</span>
+      </div>
     </div>
   </nav>
   <div class="host-layout">
@@ -651,11 +722,37 @@
   </div>
   <div class="confetti-container" id="confetti-container"></div>
 </div>
-
-<!-- Generating overlay -->
-<div class="gen-overlay" id="gen-overlay" style="display:none">
-  <div class="gen-spinner"></div>
   <div class="gen-msg" id="gen-msg">Generating quiz questions with AI...</div>
+</div>
+
+<!-- Firebase Setup Modal -->
+<div id="firebase-setup-modal" style="display:none;position:fixed;inset:0;background:rgba(10,14,26,0.97);z-index:500;align-items:center;justify-content:center;padding:20px">
+  <div style="max-width:560px;width:100%;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:36px">
+    <div style="font-size:28px;font-weight:800;margin-bottom:8px">⚡ One-time Firebase Setup</div>
+    <p style="color:var(--muted);margin-bottom:24px;line-height:1.6">To work across all devices, this quiz needs a free Firebase Realtime Database. Takes about 2 minutes:</p>
+    <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:28px">
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:16px;display:flex;gap:12px">
+        <div style="width:28px;height:28px;border-radius:50%;background:rgba(0,212,255,0.15);border:1px solid var(--accent);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;flex-shrink:0;color:var(--accent)">1</div>
+        <div><div style="font-weight:600;margin-bottom:2px">Create free project</div><div style="font-size:13px;color:var(--muted)">Go to <a href="https://console.firebase.google.com" target="_blank" style="color:var(--accent)">console.firebase.google.com</a> → New Project (no billing needed)</div></div>
+      </div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:16px;display:flex;gap:12px">
+        <div style="width:28px;height:28px;border-radius:50%;background:rgba(0,212,255,0.15);border:1px solid var(--accent);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;flex-shrink:0;color:var(--accent)">2</div>
+        <div><div style="font-weight:600;margin-bottom:2px">Enable Realtime Database</div><div style="font-size:13px;color:var(--muted)">Build → Realtime Database → Create database → <strong style="color:var(--text)">Start in test mode</strong></div></div>
+      </div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:16px;display:flex;gap:12px">
+        <div style="width:28px;height:28px;border-radius:50%;background:rgba(0,212,255,0.15);border:1px solid var(--accent);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;flex-shrink:0;color:var(--accent)">3</div>
+        <div><div style="font-weight:600;margin-bottom:2px">Get your config</div><div style="font-size:13px;color:var(--muted)">Project Settings → Your apps → Add Web App → copy the <code style="background:var(--bg);padding:2px 6px;border-radius:4px">firebaseConfig</code> object</div></div>
+      </div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:16px;display:flex;gap:12px">
+        <div style="width:28px;height:28px;border-radius:50%;background:rgba(0,212,255,0.15);border:1px solid var(--accent);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;flex-shrink:0;color:var(--accent)">4</div>
+        <div><div style="font-weight:600;margin-bottom:2px">Paste into this file</div><div style="font-size:13px;color:var(--muted)">Open quiz-app.html in a text editor → find <code style="background:var(--bg);padding:2px 6px;border-radius:4px">const firebaseConfig</code> → replace the values</div></div>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px">
+      <a href="https://console.firebase.google.com" target="_blank" class="btn btn-primary" style="flex:1;justify-content:center">Open Firebase Console →</a>
+      <button class="btn btn-ghost" onclick="document.getElementById('firebase-setup-modal').style.display='none'">Close</button>
+    </div>
+  </div>
 </div>
 
 </div><!-- .page -->
@@ -664,9 +761,7 @@
 // ══════════════════════════════════════
 // STATE
 // ══════════════════════════════════════
-const STATE_KEY = 'qlive_state';
-const ANSWERS_KEY = 'qlive_answers';
-const PARTICIPANTS_KEY = 'qlive_participants';
+
 
 let myRole = null; // 'host' | 'participant'
 let myName = '';
@@ -681,100 +776,8 @@ let questionStartTime = null;
 let currentQuestions = [];
 let currentQIndex = -1;
 let pollInterval = null;
-
-// Pre-baked fallback questions (from presentation content)
-const FALLBACK_QUESTIONS = [
-  {
-    question: "What does 'prompt resolution' mean in Salesforce Prompt Builder?",
-    options: ["Fixing errors in a prompt","Replacing merge fields with real org data","Activating a template org-wide","Deleting old template versions"],
-    correct: 1,
-    explanation: "Prompt resolution = replacing template merge fields with real org data at runtime."
-  },
-  {
-    question: "Which Prompt Template type auto-displays in the Highlights Panel without any user action?",
-    options: ["Sales Email","Field Generation","Record Summary","Flex"],
-    correct: 2,
-    explanation: "Record Summary auto-displays in the Highlights Panel the moment a record opens — no button click needed."
-  },
-  {
-    question: "How many total merge fields are allowed per Prompt Template?",
-    options: ["10","25","50","100"],
-    correct: 2,
-    explanation: "The hard limit is 50 total merge fields per template."
-  },
-  {
-    question: "Which template type requires Dynamic Forms (LAB) setup in Lightning App Builder?",
-    options: ["Record Summary","Sales Email","Flex","Field Generation"],
-    correct: 3,
-    explanation: "Field Generation requires Dynamic Forms enabled in Lightning App Builder to assign the prompt template to a field."
-  },
-  {
-    question: "What happens when you ACTIVATE a Prompt Template version?",
-    options: ["It becomes available only to admins","It is deleted after 30 days","It becomes immutable and available org-wide","It sends a notification to all users"],
-    correct: 2,
-    explanation: "Activating a template version makes it immutable (cannot be edited) and available org-wide. Only one version can be active at a time."
-  },
-  {
-    question: "Which Prompt Template type supports up to 5 custom inputs and is invoked programmatically?",
-    options: ["Sales Email","Record Summary","Field Generation","Flex"],
-    correct: 3,
-    explanation: "Flex is the most versatile type — it supports up to 5 custom inputs and can be invoked via Apex, Flow, REST API, or Agentforce Agents."
-  },
-  {
-    question: "What is the purpose of the Einstein Trust Layer in Prompt Builder?",
-    options: ["It generates AI responses faster","It masks PII before sending to the LLM and enforces zero-retention","It stores prompt templates securely","It validates merge field syntax"],
-    correct: 1,
-    explanation: "The Trust Layer masks PII (replacing with angle-bracket placeholders) before the prompt is sent to the external LLM, and enforces zero-retention policy."
-  },
-  {
-    question: "What does a LOW temperature setting (0.0–0.3) produce in LLM output?",
-    options: ["More creative and varied responses","Faster generation speed","Highly consistent and deterministic factual output","Shorter responses with fewer tokens"],
-    correct: 2,
-    explanation: "Low temperature (0.0–0.3) produces factual summaries and highly consistent, repeatable output — ideal for case notes and structured data extraction."
-  },
-  {
-    question: "In a Sales Email template, which three predefined resources are available?",
-    options: ["Account, Contact, Case","Sender, Recipient, Related Object","User, Lead, Opportunity","Template, Flow, Apex"],
-    correct: 1,
-    explanation: "Sales Email templates have three predefined resources: Sender (logged-in user), Recipient (Contact/Lead), and Related Object (Account/Opportunity/Event)."
-  },
-  {
-    question: "What is the maximum number of template versions allowed per Prompt Template?",
-    options: ["10","25","50","Unlimited"],
-    correct: 2,
-    explanation: "Each Prompt Template supports a maximum of 50 versions."
-  },
-  {
-    question: "Which merge field syntax retrieves ALL child records (e.g. case comments) as text?",
-    options: ["{!$Input:Case.Comments}","{!$RelatedList:Case.CaseComments}","{!$Flow:Case.Comments}","{!$Apex:Case.Comments}"],
-    correct: 1,
-    explanation: "RelatedList merge fields (e.g. {!$RelatedList:Case.CaseComments}) retrieve all child records and concatenate them as text."
-  },
-  {
-    question: "Frequency Penalty in LLM parameters penalises tokens based on what?",
-    options: ["Whether they appear at all in the response","How frequently they appear in the response","The total length of the response","The model's token limit"],
-    correct: 1,
-    explanation: "Frequency Penalty penalises tokens based on how frequently they have already appeared in the response, reducing repetitive phrasing."
-  },
-  {
-    question: "Which Prompt Builder architecture layer replaces merge fields with real data AND masks PII?",
-    options: ["Merge Field Layer","Template Layer","Execution/Delivery Layer","Resource Layer"],
-    correct: 2,
-    explanation: "The Execution/Delivery Layer composes the final prompt, replaces merge fields, masks PII via the Trust Layer, then calls the LLM."
-  },
-  {
-    question: "What does 'grounding' mean in the context of Prompt Templates?",
-    options: ["Restricting the LLM to a safe word list","Connecting the prompt to real Salesforce CRM data for context","Limiting the number of tokens generated","Encrypting the prompt before sending"],
-    correct: 1,
-    explanation: "Grounding connects your prompt to relevant Salesforce CRM data, making the difference between generic AI output and precise, record-specific answers."
-  },
-  {
-    question: "What is the standard batch processing limit for items per AiJobRun (non-native batch)?",
-    options: ["500","1,000","5,000","10,000"],
-    correct: 1,
-    explanation: "The standard limit is 1,000 AiJobRunItems per AiJobRun. Native batch models support up to 10,000 items per run."
-  }
-];
+let currentLiveState = null;  // cached state for participants
+let hostLiveAnswers = [];      // cached answers for host
 
 // ══════════════════════════════════════
 // NAVIGATION
@@ -794,70 +797,164 @@ function goTo(screenId) {
 }
 
 // ══════════════════════════════════════
-// BROADCAST (using localStorage for cross-tab)
+// FIREBASE REALTIME DATABASE
 // ══════════════════════════════════════
-function broadcastState(data) {
-  localStorage.setItem(STATE_KEY, JSON.stringify({ ...data, ts: Date.now() }));
+let db = null;
+let sessionRef = null;
+let sessionId = null;
+let firebaseListeners = [];
+
+function initFirebase() {
+  return new Promise((resolve) => {
+    if (db) { resolve(true); return; }
+    // Firebase compat SDK loaded via CDN in <head>
+    try {
+      if (!firebase.apps.length) {
+        // ─────────────────────────────────────────────────────────
+        // SETUP: Replace with YOUR Firebase project config.
+        // Steps (free, 2 min):
+        //   1. Go to https://console.firebase.google.com
+        //   2. Create project → Add Web App → copy config below
+        //   3. Go to Realtime Database → Create database → Start in test mode
+        // ─────────────────────────────────────────────────────────
+        const firebaseConfig = {
+          apiKey: "AIzaSyBTF5o6kDu8RwnepCxLMkDxXei4eliJn7I",
+          authDomain: "quiz-343b2.firebaseapp.com",
+          databaseURL: "https://quiz-343b2-default-rtdb.firebaseio.com",
+          projectId: "quiz-343b2",
+          storageBucket: "quiz-343b2.firebasestorage.app",
+          messagingSenderId: "33679588252",
+          appId: "1:33679588252:web:92516b8d077d2ca480e659",
+          measurementId: "G-GHWDNGZW6J"
+        };
+
+        // Check if config has been filled in
+        if (firebaseConfig.apiKey.includes('REPLACE')) {
+          showFirebaseSetupModal();
+          resolve(false);
+          return;
+        }
+
+        firebase.initializeApp(firebaseConfig);
+      }
+      db = firebase.database();
+      resolve(true);
+    } catch(e) {
+      console.error('Firebase init failed', e);
+      resolve(false);
+    }
+  });
 }
 
-function readState() {
-  try { return JSON.parse(localStorage.getItem(STATE_KEY) || 'null'); } catch { return null; }
+function getSessionRef(sid) {
+  return db.ref('sessions/' + sid);
 }
 
-function saveAnswers(answers) {
-  localStorage.setItem(ANSWERS_KEY, JSON.stringify(answers));
+async function broadcastState(data) {
+  if (!db || !sessionId) return;
+  const payload = { ...data, ts: Date.now() };
+  // Don't store questions array on every broadcast (too large) — store once
+  if (payload.questions) { delete payload.questions; }
+  await getSessionRef(sessionId).child('state').set(payload);
 }
 
-function readAnswers() {
-  try { return JSON.parse(localStorage.getItem(ANSWERS_KEY) || '[]'); } catch { return []; }
+async function saveAnswers(answer) {
+  // answer is a single answer object — push to list
+  if (!db || !sessionId) return;
+  await getSessionRef(sessionId).child('answers').push(answer);
 }
 
-function saveParticipants(p) {
-  localStorage.setItem(PARTICIPANTS_KEY, JSON.stringify(p));
+async function readAnswers() {
+  if (!db || !sessionId) return [];
+  const snap = await getSessionRef(sessionId).child('answers').get();
+  if (!snap.exists()) return [];
+  return Object.values(snap.val() || {});
 }
 
-function readParticipants() {
-  try { return JSON.parse(localStorage.getItem(PARTICIPANTS_KEY) || '[]'); } catch { return []; }
+async function saveParticipant(p) {
+  if (!db || !sessionId) return;
+  const safe = p.name.replace(/[.#$/\[\]]/g, '_');
+  await getSessionRef(sessionId).child('participants/' + safe).set(p);
+}
+
+async function updateParticipantScore(name, score, correct) {
+  if (!db || !sessionId) return;
+  const safe = name.replace(/[.#$/\[\]]/g, '_');
+  await getSessionRef(sessionId).child('participants/' + safe).update({ score, correct });
+}
+
+async function readParticipants() {
+  if (!db || !sessionId) return [];
+  const snap = await getSessionRef(sessionId).child('participants').get();
+  if (!snap.exists()) return [];
+  return Object.values(snap.val() || {});
+}
+
+function listenState(callback) {
+  if (!db || !sessionId) return;
+  const ref = getSessionRef(sessionId).child('state');
+  const handler = ref.on('value', snap => {
+    if (snap.exists()) callback(snap.val());
+  });
+  firebaseListeners.push({ ref, handler, event: 'value' });
+}
+
+function listenAnswers(callback) {
+  if (!db || !sessionId) return;
+  const ref = getSessionRef(sessionId).child('answers');
+  const handler = ref.on('value', snap => {
+    callback(snap.exists() ? Object.values(snap.val() || {}) : []);
+  });
+  firebaseListeners.push({ ref, handler, event: 'value' });
+}
+
+function listenParticipants(callback) {
+  if (!db || !sessionId) return;
+  const ref = getSessionRef(sessionId).child('participants');
+  const handler = ref.on('value', snap => {
+    callback(snap.exists() ? Object.values(snap.val() || {}) : []);
+  });
+  firebaseListeners.push({ ref, handler, event: 'value' });
+}
+
+function removeAllListeners() {
+  firebaseListeners.forEach(({ ref, handler, event }) => ref.off(event, handler));
+  firebaseListeners = [];
 }
 
 // ══════════════════════════════════════
 // PARTICIPANT JOIN
 // ══════════════════════════════════════
-function joinQuiz() {
+async function joinQuiz() {
   const name = document.getElementById('participant-name').value.trim();
   if (!name) { showToast('Please enter your name'); return; }
+
+  const sid = document.getElementById('session-code-input').value.trim().toUpperCase();
+  if (!sid || sid.length < 4) { showToast('Please enter the session code from your host'); return; }
+
+  showToast('Connecting...');
+  const ok = await initFirebase();
+  if (!ok) { showToast('❌ Could not connect. Check internet.'); return; }
+
+  sessionId = sid;
   myName = name;
   myRole = 'participant';
   myScore = 0;
   myCorrect = 0;
 
-  // Register participant
-  const participants = readParticipants();
-  if (!participants.find(p => p.name === name)) {
-    participants.push({ name, score: 0, correct: 0, joinedAt: Date.now() });
-    saveParticipants(participants);
-  }
+  await saveParticipant({ name, score: 0, correct: 0, joinedAt: Date.now() });
 
   document.getElementById('join-form-section').style.display = 'none';
   document.getElementById('join-waiting-section').style.display = 'block';
   document.getElementById('joined-name-display').textContent = `Joined as: ${name}`;
 
-  // Poll for state changes
-  startParticipantPolling();
-}
-
-function startParticipantPolling() {
-  let lastTs = 0;
-  pollInterval = setInterval(() => {
-    const state = readState();
-    if (!state || state.ts === lastTs) return;
-    lastTs = state.ts;
-    handleStateChange(state);
-  }, 500);
+  // Listen for host state changes in real time
+  listenState(handleStateChange);
 }
 
 function handleStateChange(state) {
   if (state.type === 'question') {
+    currentLiveState = state;
     answerSubmitted = false;
     answerTime = null;
     questionStartTime = state.startTime;
@@ -941,14 +1038,14 @@ function disableAllOptions() {
   document.querySelectorAll('.option-btn').forEach(b => b.disabled = true);
 }
 
-function submitAnswer(index, btn) {
+async function submitAnswer(index, btn) {
   if (answerSubmitted) return;
   answerSubmitted = true;
   answerTime = Date.now();
   disableAllOptions();
   btn.classList.add('selected');
 
-  const state = readState();
+  const state = currentLiveState;
   if (!state) return;
   const correct = index === state.question.correct;
 
@@ -962,16 +1059,11 @@ function submitAnswer(index, btn) {
     myCorrect += 1;
   }
 
-  // Record answer
-  const answers = readAnswers();
-  answers.push({ name: myName, qIndex: state.qIndex, chosen: index, correct, pts, time: answerTime - state.startTime });
-  saveAnswers(answers);
+  // Record answer — push single answer object
+  await saveAnswers({ name: myName, qIndex: state.qIndex, chosen: index, correct, pts, time: answerTime - state.startTime });
 
-  // Update score in participants
-  const participants = readParticipants();
-  const me = participants.find(p => p.name === myName);
-  if (me) { me.score = myScore; me.correct = myCorrect; }
-  saveParticipants(participants);
+  // Update score in Firebase
+  await updateParticipantScore(myName, myScore, myCorrect);
 
   // Update badge
   document.getElementById('p-score-badge').textContent = `Score: ${myScore}`;
@@ -998,96 +1090,139 @@ function showParticipantResult(correct, pts, correctIndex, question) {
   }
 }
 
-// ══════════════════════════════════════
-// HOST: GENERATE QUESTIONS
-// ══════════════════════════════════════
-const PRESENTATION_CONTEXT = `Salesforce Prompt Builder presentation covering: Prompt Templates & Its Types. Key topics: 
-- What is a Prompt, Prompt Template, and Prompt Builder
-- 5 architecture layers: Prompt Layer, Merge Field Layer, Resource Layer, Template Layer, Execution/Delivery Layer
-- 4 major template types: Sales Email (entry point: Email Composer, Draft with Einstein button), Field Generation (entry point: Einstein star button, requires Dynamic Forms/LAB), Record Summary (auto-displays in Highlights Panel, no user action), Flex (Apex/Flow/API, up to 5 custom inputs, most versatile)
-- Merge fields: Input fields, Related object fields (syntax: {!$Input:Object.Field}), Related Lists ({!$RelatedList:Object.Field}), max 50 total, max 5 Flow, 5 Apex, 5 Related List, 5 Flex inputs
-- Grounding: connecting prompts to CRM data for specific accurate responses
-- LLM parameters: Temperature (0-2, low=deterministic, high=creative), Max Tokens, Frequency Penalty (penalises frequent tokens), Presence Penalty (penalises any appearance), Top-P, Stop Sequences
-- Versioning: Draft → Preview → Activate → Monitor → Revise; activating makes version immutable; max 50 versions
-- Batch processing: Flow (no-code, template-triggered) and Apex (custom); max 1000 AiJobRunItems standard, 10000 native batch; max 5 AiJobRun objects per 24hrs
-- Hard limits: 128,000 char template size, 50 versions, 50 merge fields total, 15MB file size
-- Einstein Trust Layer: masks PII before LLM, zero-retention policy for all external models`;
-
-async function generateQuestions() {
-  const n = parseInt(document.getElementById('num-questions').value);
-  const diff = document.getElementById('difficulty').value;
-  timePerQ = parseInt(document.getElementById('time-per-q').value);
-
-  document.getElementById('gen-overlay').style.display = 'flex';
-  document.getElementById('gen-msg').textContent = 'Generating quiz questions with AI...';
-
-  try {
-    const prompt = `You are a quiz creator. Based on this Salesforce Prompt Builder presentation content, generate exactly ${n} multiple-choice quiz questions at ${diff} difficulty.
-
-Content: ${PRESENTATION_CONTEXT}
-
-Return ONLY valid JSON array, no markdown, no backticks, no explanation:
-[
-  {
-    "question": "Question text here?",
-    "options": ["Option A", "Option B", "Option C", "Option D"],
-    "correct": 0,
-    "explanation": "Brief explanation why this is correct"
-  }
-]
-
-Rules:
-- "correct" is the 0-based index of the correct option
-- All 4 options must be plausible
-- Questions must be factual and based only on the content provided
-- ${diff === 'hard' ? 'Include tricky questions about specific numbers, limits, and syntax' : diff === 'easy' ? 'Focus on core concepts and definitions' : 'Mix conceptual and specific questions'}
-- Return exactly ${n} questions`;
-
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1000,
-        messages: [{ role: 'user', content: prompt }]
-      })
+function parseQuestions(raw) {
+  const blocks = raw.trim().split(/\n\s*\n+/);
+  const questions = [], errors = [];
+  blocks.forEach((block, bi) => {
+    const lines = block.trim().split('\n').map(l => l.trim()).filter(Boolean);
+    if (!lines.length) return;
+    let question = null, options = [], correct = null, explanation = '';
+    lines.forEach(line => {
+      if (/^Q\s*:/i.test(line)) { question = line.replace(/^Q\s*:\s*/i, '').trim(); }
+      else if (/^[A-D]\s*:/i.test(line)) {
+        const idx = 'ABCD'.indexOf(line[0].toUpperCase());
+        options[idx] = line.replace(/^[A-D]\s*:\s*/i, '').trim();
+      }
+      else if (/^ANSWER\s*:/i.test(line)) {
+        const ans = line.replace(/^ANSWER\s*:\s*/i, '').trim().toUpperCase();
+        correct = 'ABCD'.indexOf(ans[0]);
+      }
+      else if (/^EXPLANATION\s*:/i.test(line)) {
+        explanation = line.replace(/^EXPLANATION\s*:\s*/i, '').trim();
+      }
     });
+    if (!question) { errors.push(`Block ${bi+1}: Missing Q: line`); return; }
+    if (options.filter(Boolean).length < 2) { errors.push(`Block ${bi+1}: Need at least 2 options (A:, B:, C:, D:)`); return; }
+    if (correct === null || correct === -1) { errors.push(`Block ${bi+1}: Missing or invalid ANSWER: (use A/B/C/D)`); return; }
+    if (!options[correct]) { errors.push(`Block ${bi+1}: ANSWER points to an option that does not exist`); return; }
+    while (options.length < 4) options.push('');
+    questions.push({ question, options: options.slice(0,4).map((o,i) => o || ''), correct, explanation });
+  });
+  return { questions, errors };
+}
 
-    const data = await response.json();
-    const text = data.content.map(c => c.text || '').join('');
-    const clean = text.replace(/```json|```/g, '').trim();
-    currentQuestions = JSON.parse(clean);
-
-    if (!Array.isArray(currentQuestions) || currentQuestions.length === 0) throw new Error('Empty');
-  } catch (e) {
-    console.warn('AI generation failed, using fallback:', e);
-    const n2 = parseInt(document.getElementById('num-questions').value);
-    currentQuestions = FALLBACK_QUESTIONS.slice(0, Math.min(n2, FALLBACK_QUESTIONS.length));
-    showToast('Using pre-built questions (AI unavailable)');
+function parseAndPreview() {
+  const raw = document.getElementById('questions-paste').value;
+  const errorEl = document.getElementById('preview-error');
+  const listEl = document.getElementById('preview-list');
+  const countEl = document.getElementById('preview-count');
+  const launchBtn = document.getElementById('launch-btn');
+  errorEl.style.display = 'none';
+  listEl.innerHTML = '';
+  if (!raw.trim()) { errorEl.textContent = 'Please paste your questions first.'; errorEl.style.display = 'block'; return; }
+  const { questions, errors } = parseQuestions(raw);
+  if (errors.length) {
+    errorEl.innerHTML = '<strong>\u26a0\ufe0f Some blocks had issues:</strong><br>' + errors.map(e => '\u2022 ' + e).join('<br>');
+    errorEl.style.display = 'block';
   }
+  if (questions.length === 0) {
+    countEl.textContent = '\u2014 0 questions parsed';
+    launchBtn.style.display = 'none';
+    if (!errors.length) { errorEl.textContent = 'No questions found. Check the format.'; errorEl.style.display = 'block'; }
+    return;
+  }
+  countEl.textContent = `\u2014 ${questions.length} question${questions.length > 1 ? 's' : ''} ready`;
+  launchBtn.style.display = 'inline-flex';
+  questions.forEach((q, i) => {
+    const card = document.createElement('div');
+    card.className = 'preview-q-card';
+    card.innerHTML = `
+      <div class="preview-q-num">Q${i+1}</div>
+      <div class="preview-q-text">${q.question}</div>
+      <div class="preview-options">
+        ${q.options.map((opt, oi) => opt ? `<div class="preview-opt ${oi === q.correct ? 'is-correct' : ''}">
+          <span class="preview-opt-letter">${'ABCD'[oi]}</span>${opt}${oi === q.correct ? ' \u2713' : ''}
+        </div>` : '').join('')}
+      </div>
+      ${q.explanation ? `<div class="preview-explanation">\ud83d\udca1 ${q.explanation}</div>` : ''}
+    `;
+    listEl.appendChild(card);
+  });
+  currentQuestions = questions;
+  showToast('\u2705 ' + questions.length + ' questions parsed successfully');
+}
 
-  document.getElementById('gen-overlay').style.display = 'none';
+function launchFromPreview() {
+  if (!currentQuestions.length) { showToast('Parse questions first'); return; }
+  timePerQ = parseInt(document.getElementById('time-per-q').value);
   launchHostDashboard();
 }
+
+function loadExample() {
+  document.getElementById('questions-paste').value = `Q: What does prompt resolution mean in Salesforce Prompt Builder?
+A: Fixing errors in a prompt template
+B: Replacing merge fields with real org data at runtime
+C: Activating a template to make it org-wide
+D: Deleting old template versions
+ANSWER: B
+EXPLANATION: Prompt resolution means replacing template merge fields with real Salesforce CRM data at runtime.
+
+Q: Which Prompt Template type auto-displays in the Highlights Panel without any user action?
+A: Sales Email
+B: Field Generation
+C: Record Summary
+D: Flex
+ANSWER: C
+EXPLANATION: Record Summary auto-displays in the Highlights Panel the moment a record opens, no button click needed.
+
+Q: What is the maximum number of total merge fields allowed per Prompt Template?
+A: 10
+B: 25
+C: 50
+D: 100
+ANSWER: C
+EXPLANATION: The hard limit is 50 total merge fields per template.`;
+  parseAndPreview();
+}
+
 
 // ══════════════════════════════════════
 // HOST DASHBOARD
 // ══════════════════════════════════════
-function launchHostDashboard() {
+async function launchHostDashboard() {
   myRole = 'host';
   currentQIndex = -1;
 
-  // Clear previous session data
-  saveAnswers([]);
-  const sessionCode = Math.random().toString(36).slice(2,6).toUpperCase();
-  document.getElementById('session-code-display').textContent = sessionCode;
+  showToast('Setting up session...');
+  const ok = await initFirebase();
+  if (!ok) { showToast('❌ Firebase unavailable. Check internet.'); return; }
+
+  // Create new session ID
+  sessionId = Math.random().toString(36).slice(2,6).toUpperCase();
+  document.getElementById('session-code-display').textContent = sessionId;
+
+  // Clear old data
+  await getSessionRef(sessionId).remove();
+
+  // Store questions on Firebase once
+  await getSessionRef(sessionId).child('questions').set(currentQuestions);
 
   goTo('host');
   renderQList();
-  broadcastState({ type: 'waiting' });
+  await broadcastState({ type: 'waiting' });
 
-  // Poll participants
-  startHostPolling();
+  // Listen for participants and answers in real time
+  startHostRealtimeListeners();
 }
 
 function renderQList() {
@@ -1103,37 +1238,38 @@ function renderQList() {
   });
 }
 
-function startHostPolling() {
-  setInterval(() => {
-    const participants = readParticipants();
+function startHostRealtimeListeners() {
+  // Listen to participants
+  listenParticipants((participants) => {
     document.getElementById('p-count').textContent = participants.length;
     document.getElementById('stat-participants').textContent = participants.length;
-
     const pList = document.getElementById('participants-list');
     pList.innerHTML = '';
-    participants.forEach(p => {
+    participants.sort((a,b) => (b.score||0)-(a.score||0)).forEach(p => {
       const chip = document.createElement('div');
       chip.className = 'participant-chip';
-      const answers = readAnswers();
-      const answered = currentQIndex >= 0 && answers.some(a => a.name === p.name && a.qIndex === currentQIndex);
+      const answered = currentQIndex >= 0 && hostLiveAnswers.some(a => a.name === p.name && a.qIndex === currentQIndex);
       chip.innerHTML = `<div class="participant-dot ${answered ? 'answered' : ''}"></div><span>${p.name}</span><span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent)">${p.score || 0}</span>`;
       pList.appendChild(chip);
     });
+  });
 
-    // Update live answer counts
+  // Listen to answers
+  listenAnswers((answers) => {
+    hostLiveAnswers = answers;
     if (currentQIndex >= 0) {
-      const answers = readAnswers().filter(a => a.qIndex === currentQIndex);
-      document.getElementById('stat-answered').textContent = answers.length;
-      updateLiveAnswerBars(answers);
+      const qAnswers = answers.filter(a => a.qIndex === currentQIndex);
+      document.getElementById('stat-answered').textContent = qAnswers.length;
+      updateLiveAnswerBars(qAnswers);
     }
-  }, 800);
+  });
 }
 
 function launchNextQuestion() {
   launchQuestion(0);
 }
 
-function launchQuestion(index) {
+async function launchQuestion(index) {
   if (index >= currentQuestions.length) {
     showLeaderboard();
     return;
@@ -1142,13 +1278,12 @@ function launchQuestion(index) {
   const q = currentQuestions[index];
   const startTime = Date.now();
 
-  // Broadcast to participants
-  broadcastState({
+  // Broadcast to participants via Firebase
+  await broadcastState({
     type: 'question',
     qIndex: index,
     total: currentQuestions.length,
     question: q,
-    questions: currentQuestions,
     timePerQ,
     startTime
   });
@@ -1210,10 +1345,10 @@ function startHostTimer(startTime) {
   questionTimerInterval = setInterval(tick, 200);
 }
 
-function endQuestion() {
+async function endQuestion() {
   clearInterval(questionTimerInterval);
   const q = currentQuestions[currentQIndex];
-  broadcastState({ type: 'reveal', correctIndex: q.correct, question: q, qIndex: currentQIndex, total: currentQuestions.length });
+  await broadcastState({ type: 'reveal', correctIndex: q.correct, question: q, qIndex: currentQIndex, total: currentQuestions.length });
 
   document.getElementById('host-active-q').style.display = 'none';
   document.getElementById('host-reveal').style.display = 'flex';
@@ -1228,7 +1363,8 @@ function endQuestion() {
   `;
 
   // Top 10
-  const answers = readAnswers().filter(a => a.qIndex === currentQIndex && a.correct);
+  const allAns = await readAnswers();
+  const answers = allAns.filter(a => a.qIndex === currentQIndex && a.correct);
   answers.sort((a,b) => a.time - b.time);
   const top10 = answers.slice(0, 10);
   const top10El = document.getElementById('host-top10');
@@ -1249,29 +1385,26 @@ function nextQuestion() {
   launchQuestion(currentQIndex + 1);
 }
 
-function showLeaderboard() {
+async function showLeaderboard() {
   clearInterval(questionTimerInterval);
-  const participants = readParticipants();
-  const answers = readAnswers();
+  const participants = await readParticipants();
+  const answers = await readAnswers();
 
-  // Compute final scores
+  // Use scores stored in Firebase participant records (updated on every answer)
   const scoreMap = {};
+  participants.forEach(p => {
+    scoreMap[p.name] = { score: p.score || 0, correct: p.correct || 0 };
+  });
+  // Catch anyone who answered but wasn't pre-registered
   answers.forEach(a => {
     if (!scoreMap[a.name]) scoreMap[a.name] = { score: 0, correct: 0 };
-    scoreMap[a.name].score += a.pts || 0;
-    if (a.correct) scoreMap[a.name].correct++;
-  });
-
-  // Merge with registered participants
-  participants.forEach(p => {
-    if (!scoreMap[p.name]) scoreMap[p.name] = { score: 0, correct: 0 };
   });
 
   const scores = Object.entries(scoreMap)
     .map(([name, d]) => ({ name, ...d }))
     .sort((a, b) => b.score - a.score);
 
-  broadcastState({ type: 'leaderboard', scores });
+  await broadcastState({ type: 'leaderboard', scores });
   goTo('leaderboard');
   renderLeaderboard(scores);
   launchConfetti();
@@ -1303,11 +1436,13 @@ function returnToHost() {
   goTo('host');
 }
 
-function restartQuiz() {
-  saveAnswers([]);
-  saveParticipants([]);
+async function restartQuiz() {
+  removeAllListeners();
+  if (db && sessionId) await getSessionRef(sessionId).remove();
+  sessionId = null;
   currentQIndex = -1;
-  broadcastState({ type: 'waiting' });
+  currentQuestions = [];
+  hostLiveAnswers = [];
   goTo('landing');
 }
 
@@ -1339,6 +1474,11 @@ function launchConfetti() {
 // ══════════════════════════════════════
 // TOAST
 // ══════════════════════════════════════
+function showFirebaseSetupModal() {
+  const modal = document.getElementById('firebase-setup-modal');
+  modal.style.display = 'flex';
+}
+
 function showToast(msg) {
   const t = document.createElement('div');
   t.className = 'toast';
@@ -1350,20 +1490,7 @@ function showToast(msg) {
 // ══════════════════════════════════════
 // INIT
 // ══════════════════════════════════════
-// Clear old state on fresh load
-if (!localStorage.getItem('qlive_init')) {
-  localStorage.removeItem(STATE_KEY);
-  localStorage.removeItem(ANSWERS_KEY);
-  localStorage.removeItem(PARTICIPANTS_KEY);
-}
 
-// Listen for storage events (cross-tab)
-window.addEventListener('storage', (e) => {
-  if (e.key === STATE_KEY && myRole === 'participant') {
-    const state = readState();
-    if (state) handleStateChange(state);
-  }
-});
 </script>
 </body>
 </html>
